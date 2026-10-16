@@ -1,0 +1,3 @@
+[mysqld]
+# 首次安装前容忍未知选项；插件安装后及后续启动均使用数据卷内的索引目录。
+loose-myvector-index-dir=/var/lib/mysql

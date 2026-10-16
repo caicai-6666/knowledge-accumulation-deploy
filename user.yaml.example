@@ -1,0 +1,4 @@
+# 复制为 user.yaml，并为每名审核人设置独立的随机密钥。
+users:
+  - name: "注册中心审核员"
+    secret_key: "replace-with-an-independent-random-secret"

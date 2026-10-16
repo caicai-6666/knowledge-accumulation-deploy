@@ -1,0 +1,85 @@
+name: registry
+
+services:
+  backend:
+    build:
+      context: ../registry-be
+      dockerfile: Dockerfile
+    image: registry-be:dev
+    env_file:
+      # 原样传递实际配置，避免密钥中的 $ 被 Compose 插值。
+      - path: ../registry-be/.env
+        format: raw
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-registry}
+      MYSQL_USER: ${MYSQL_USER:-registry}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请在 .env 中设置 MySQL 业务账号密码}
+      MIDDLEWARE_BASE_URL: ${MIDDLEWARE_BASE_URL:-http://host.docker.internal:22000}
+      REVIEWER_USER_FILE: /workspace/data/user/users.yaml
+      SQLITE_PATH: /workspace/data/review-log/registry.db
+      RESOURCE_ROOT: /workspace/data/resource
+      REVIEW_LOG_ROOT: /workspace/data/review-log
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-23000}:8000"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - backend-data:/workspace/data
+      # 与合同部署一致：人员文件独立只读挂载，缺失时不创建同名目录。
+      - type: bind
+        source: ./user.yaml
+        target: /workspace/data/user/users.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - registry
+    init: true
+    restart: unless-stopped
+
+  mysql:
+    build:
+      context: ./mysql
+      dockerfile: Dockerfile
+      args:
+        MYSQL_VERSION: ${MYSQL_VERSION:-8.4}
+    image: registry-mysql:${MYSQL_VERSION:-8.4}
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 中设置 MySQL root 密码}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-registry}
+      MYSQL_USER: ${MYSQL_USER:-registry}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请在 .env 中设置 MySQL 业务账号密码}
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - registry
+    # 使用业务账号执行查询，确认数据库已初始化且可通过 TCP 访问。
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          MYSQL_PWD="$${MYSQL_PASSWORD}"
+          mysql --protocol=TCP --host=127.0.0.1
+          --user="$${MYSQL_USER}" --database="$${MYSQL_DATABASE}"
+          --execute="SELECT 1" --silent >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    stop_grace_period: 1m
+
+volumes:
+  backend-data:
+  mysql-data:
+
+networks:
+  registry:
+    driver: bridge

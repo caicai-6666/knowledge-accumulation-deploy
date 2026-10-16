@@ -1,0 +1,6 @@
+*
+!Dockerfile
+!init/
+!init/*.sql
+!init/*.sh
+!myvector-options.cnf
