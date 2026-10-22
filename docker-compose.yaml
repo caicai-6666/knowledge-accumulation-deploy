@@ -17,7 +17,8 @@ services:
       MYSQL_USER: ${MYSQL_USER:-registry}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请在 .env 中设置 MySQL 业务账号密码}
       MIDDLEWARE_BASE_URL: ${MIDDLEWARE_BASE_URL:-http://host.docker.internal:22000}
-      REVIEWER_USER_FILE: /workspace/data/user/users.yaml
+      # 同一 Compose 网络内通过服务名访问知识后端。
+      KNOWLEDGE_ACCUMULATION_BASE_URL: ${KNOWLEDGE_ACCUMULATION_BASE_URL:-http://knowledge-backend:8000}
       SQLITE_PATH: /workspace/data/review-log/registry.db
       RESOURCE_ROOT: /workspace/data/resource
       REVIEW_LOG_ROOT: /workspace/data/review-log
@@ -27,15 +28,66 @@ services:
       - host.docker.internal:host-gateway
     volumes:
       - backend-data:/workspace/data
-      # 与合同部署一致：人员文件独立只读挂载，缺失时不创建同名目录。
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - registry
+    init: true
+    restart: unless-stopped
+
+  knowledge-backend:
+    build:
+      context: ../knowledge-accumulation-be
+      dockerfile: Dockerfile
+    image: knowledge-accumulation-be:dev
+    environment:
+      # 与 registry 共用权威人员库，避免权限和管理员关系出现副本。
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-registry}
+      MYSQL_USER: ${MYSQL_USER:-registry}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请在 .env 中设置 MySQL 业务账号密码}
+      MIDDLEWARE_BASE_URL: ${MIDDLEWARE_BASE_URL:-http://host.docker.internal:22000}
+      MIDDLEWARE_PLATFORM_CODE: knowledge-accumulation
+      # 与前端构建共用公开企业标识；应用密钥仍只读取后端配置。
+      DINGTALK_CORP_ID: ${DINGTALK_CORP_ID:-}
+      AVATAR_ROOT: /workspace/data/user/avatar
+    ports:
+      - "127.0.0.1:${KNOWLEDGE_BACKEND_PORT:-24000}:8000"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      # 应用自行用 python-dotenv 解析，保留现有带引号 JSON 和密钥的语义。
       - type: bind
-        source: ./user.yaml
-        target: /workspace/data/user/users.yaml
+        source: ${KNOWLEDGE_BACKEND_ENV_FILE:-../knowledge-accumulation-be/.env}
+        target: /workspace/.env
         read_only: true
         bind:
           create_host_path: false
+      - knowledge-backend-data:/workspace/data
     depends_on:
       mysql:
+        condition: service_healthy
+    networks:
+      - registry
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 1m
+
+  knowledge-frontend:
+    build:
+      context: ../knowledge-accumulation-fe
+      dockerfile: Dockerfile
+      args:
+        VITE_DINGTALK_CORP_ID: ${DINGTALK_CORP_ID:-}
+    image: knowledge-accumulation-fe:dev
+    environment:
+      BACKEND_UPSTREAM: knowledge-backend:8000
+    ports:
+      - "127.0.0.1:${KNOWLEDGE_FRONTEND_PORT:-24080}:80"
+    depends_on:
+      knowledge-backend:
         condition: service_healthy
     networks:
       - registry
@@ -78,6 +130,7 @@ services:
 
 volumes:
   backend-data:
+  knowledge-backend-data:
   mysql-data:
 
 networks:

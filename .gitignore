@@ -2,8 +2,5 @@
 .env.*
 !.env.example
 
-# 独立只读挂载的真实人员名单及密钥；模板可提交。
-/user.yaml
-
 # macOS 目录元数据。
 .DS_Store

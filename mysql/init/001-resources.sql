@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS resources (
     reviewer_note TEXT NULL COMMENT '入库审核通过时的审核人备注，历史未知时为空',
     requested_at DATETIME(6) NOT NULL COMMENT '文件入库申请时间，UTC',
     embedding JSON NULL COMMENT '文件相似度匹配的向量数组，未生成时为空',
+    file_level BIGINT NULL COMMENT '入库审核确定的文件等级，历史未知时为空；有符号 64 位整数',
     passport JSON NULL COMMENT '文件通行证字符串数组，一份文件可持有多个通行证，历史未知时为空',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '注册中心文件记录创建时间，UTC',
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '文件记录更新时间，UTC',
