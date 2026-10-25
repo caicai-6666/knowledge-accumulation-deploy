@@ -48,6 +48,13 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-registry}
       MYSQL_USER: ${MYSQL_USER:-registry}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请在 .env 中设置 MySQL 业务账号密码}
+      # 文件检索与鉴权读取 registry 的同一权威源，覆盖挂载配置中的本机连接项。
+      FILE_SOURCE_MYSQL_HOST: mysql
+      FILE_SOURCE_MYSQL_PORT: "3306"
+      FILE_SOURCE_MYSQL_DATABASE: ${MYSQL_DATABASE:-registry}
+      FILE_SOURCE_MYSQL_USER: ${MYSQL_USER:-registry}
+      FILE_SOURCE_MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请在 .env 中设置 MySQL 业务账号密码}
+      REGISTRY_BASE_URL: http://backend:8000
       MIDDLEWARE_BASE_URL: ${MIDDLEWARE_BASE_URL:-http://host.docker.internal:22000}
       MIDDLEWARE_PLATFORM_CODE: knowledge-accumulation
       # 与前端构建共用公开企业标识；应用密钥仍只读取后端配置。

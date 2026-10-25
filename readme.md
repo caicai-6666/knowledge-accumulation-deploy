@@ -81,6 +81,8 @@ Compose 把两个后端的 MySQL 地址固定为 `mysql:3306`，数据库名、�
 
 知识后端使用自己的 `knowledge-accumulation` 平台凭据。`APP_ENV=production` 时，CorpId 统一取部署 `.env` 的 `DINGTALK_CORP_ID`，AppKey、AppSecret 只从知识后端配置文件读取；开发模式需固定登录凭据。MLLM/Embedding 配置保留在知识后端配置文件，地址必须容器可达。两后端共用权威 MySQL 人员表，知识后端会自动发布用户/管理员全表，因此启动前应完成完整人员数据准备、外部授权及跨后端覆盖协调，并停止旧的同身份本机实例。
 
+知识后端的注册中心文件读取地址由 Compose 固定为 `REGISTRY_BASE_URL=http://backend:8000`。文件查询的 `FILE_SOURCE_MYSQL_HOST/PORT` 覆盖为 `mysql:3306`，`FILE_SOURCE_MYSQL_DATABASE/USER/PASSWORD` 复用本部署的 `MYSQL_DATABASE/USER/PASSWORD`，不需要新增一组配置。上述环境变量覆盖挂载后端配置中的本机地址及连接项，保证文件查询、权限校验和 registry 使用同一权威源；不创建额外检索表或修改数据库权限。
+
 首次 MySQL 初始化只含部署项目已有人员和资源表。问答表仍需显式执行知识后端 `schema/` 的 `001`、`002`、`004`、`006`、`007`、`008`、`009`、`010`；可选索引 `003`、`005` 及旧库回填前提见知识后端文档。先构建 `docker compose build knowledge-backend`，镜像中的 `/workspace/schema/` 提供迁移源；构建或启动不会自动执行迁移。已有表不能重复执行新库初始化，健康检查也不验证业务表结构。
 
 准备完成后：
