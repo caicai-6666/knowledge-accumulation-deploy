@@ -98,7 +98,7 @@ Compose 把两个后端的 MySQL 地址固定为 `mysql:3306`，数据库名、�
 | --- | --- | --- |
 | `ASSISTANT_ENABLED` | `false` | 启用个人助理消费、钉钉 Stream 入站、提醒及心跳；启用前准备机器人凭据和助理表。 |
 | `ASSISTANT_MODEL_RETRY_SECONDS` | `30` | 尚未开始生成时，模型准备暂不可用的重试间隔；不重试已经执行后失败的任务。 |
-| `ASSISTANT_RENDERING_THINKING_EFFORT` | `medium` | finish_task 转换子智能体独立推理档位：low / medium / xhigh；始终启用原生推理。 |
+| `ASSISTANT_RENDERING_THINKING_EFFORT` | `medium` | finish_task 转换默认开启 medium 推理；可选 none / low / medium / xhigh，与主助理独立。 |
 | `PLATFORM_A2A_ENABLED` | `false` | 启用跨平台协作；需中间件平台会话及 018 表。 |
 | `PLATFORM_A2A_RESPONSE_BUFFER_SECONDS` | `5` | 广播发布后的响应缓冲，必须小于整轮等待预算。 |
 | `PLATFORM_A2A_WAIT_SECONDS` | `90` | 整轮等待预算。 |
@@ -106,7 +106,7 @@ Compose 把两个后端的 MySQL 地址固定为 `mysql:3306`，数据库名、�
 | `PLATFORM_A2A_HTTP_TIMEOUT_SECONDS` | `10` | 单次中间件请求超时。 |
 | `PLATFORM_A2A_MAX_CONCURRENT_REQUESTS` | `16` | 平台协作请求并发上限。 |
 
-启用助理后，转换钩子只注册在助理 `finish_task` 上，工具执行完成后、正常提交前做一次 JSON Schema 生成；转换后的正文统一用于答案、后续上下文和钉钉交付。主助理与转换器共用后端 `VLLM_MLLM_*` 模型服务配置，服务须支持原生推理、JSON Schema 和 `/tokenize`，且地址必须容器可达。转换失败会终止当前任务，不提交原文或自动重跑。该钩子没有新增迁移、独立模型容器或独立服务端口；详见[转换契约](../knowledge-accumulation-be/description/architecture/workflow/question-answering/assistant-message-rendering.md)。
+启用助理后，转换钩子只注册在助理 `finish_task` 上，工具执行完成后、正常提交前做一次 JSON 正文生成并由本地 Pydantic 严格校验，不发送接口级 `response_format`；转换后的正文统一用于答案、后续上下文和钉钉交付。主助理与转换器共用后端 `VLLM_MLLM_*` 模型服务配置，转换默认开启 medium 推理，服务须支持 `/tokenize`，且地址必须容器可达。转换失败会终止当前任务，不提交原文或自动重跑。该钩子没有新增迁移、独立模型容器或独立服务端口；详见[转换契约](../knowledge-accumulation-be/description/architecture/workflow/question-answering/assistant-message-rendering.md)。
 
 升级已有助理部署时，按部署环境实际结构确认以下前提；不要因为本机已完成迁移而跳过其他环境，也不要盲目重复执行建表 SQL：
 
@@ -115,7 +115,7 @@ Compose 把两个后端的 MySQL 地址固定为 `mysql:3306`，数据库名、�
 - 当前助理工作区依赖 `021`，旧部署须先备份并停止所有助理写入，再显式执行 DDL 和 `python -m app.repository.assistant_memory_migration`。迁移涉及旧工作区快照清理，按[助理记忆迁移说明](../knowledge-accumulation-be/description/architecture/workflow/question-answering/assistant-memory.md#显式迁移与部署)执行，Compose 不代为执行。
 - 启用 A2A 时另需 `018`；见[跨平台协作](../knowledge-accumulation-be/description/architecture/workflow/question-answering/platform-a2a.md)。
 
-缺失配置项可按模板补齐，已有开关、地址、凭据和自定义值应保留。修改文件后需重新创建/启动知识后端才能加载；执行前停止使用同一平台身份的 IDE 进程，避免双实例争用。Docker HTTP 健康检查只证明 Web 入口可用，不能证明模型、机器人及中间件已联通。
+缺失配置项可按模板补齐；本次开启转换推理须将后端配置中的 `ASSISTANT_RENDERING_THINKING_EFFORT` 显式设为 `medium`，仅更新模板不会覆盖已有 `none`。其余开关、地址、凭据和自定义值应保留。修改文件后需重新创建/启动知识后端才能加载；执行前停止使用同一平台身份的 IDE 进程，避免双实例争用。Docker HTTP 健康检查只证明 Web 入口可用，不能证明模型、机器人及中间件已联通。
 
 ### 启动与数据卷
 
