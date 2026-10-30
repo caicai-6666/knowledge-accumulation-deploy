@@ -8,9 +8,11 @@ services:
     image: registry-be:dev
     env_file:
       # 原样传递实际配置，避免密钥中的 $ 被 Compose 插值。
-      - path: ../registry-be/.env
+      - path: ${REGISTRY_BACKEND_ENV_FILE:-../registry-be/.env}
         format: raw
     environment:
+      # 容器使用生产路径，避免实际配置中的开发前缀进入部署。
+      APP_PATH_PREFIX: ""
       MYSQL_HOST: mysql
       MYSQL_PORT: "3306"
       MYSQL_DATABASE: ${MYSQL_DATABASE:-registry}
@@ -36,12 +38,30 @@ services:
     init: true
     restart: unless-stopped
 
+  registry-frontend:
+    build:
+      context: ../registry-fe
+      dockerfile: Dockerfile
+    image: registry-fe:dev
+    environment:
+      BACKEND_UPSTREAM: backend:8000
+    ports:
+      - "127.0.0.1:${REGISTRY_FRONTEND_PORT:-23080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - registry
+    init: true
+    restart: unless-stopped
+
   knowledge-backend:
     build:
       context: ../knowledge-accumulation-be
       dockerfile: Dockerfile
     image: knowledge-accumulation-be:dev
     environment:
+      APP_PATH_PREFIX: ""
       # 与 registry 共用权威人员库，避免权限和管理员关系出现副本。
       MYSQL_HOST: mysql
       MYSQL_PORT: "3306"
@@ -66,6 +86,7 @@ services:
       - host.docker.internal:host-gateway
     volumes:
       # 应用自行用 python-dotenv 解析，保留现有带引号 JSON 和密钥的语义。
+      # 助理转换档位、模型准备重试和 A2A 参数也从此文件读取，不另设 Compose 默认值覆盖。
       - type: bind
         source: ${KNOWLEDGE_BACKEND_ENV_FILE:-../knowledge-accumulation-be/.env}
         target: /workspace/.env

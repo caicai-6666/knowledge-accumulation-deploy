@@ -1,0 +1,41 @@
+name: phenosolar-knowledge-dev
+
+# 同一个知识部署内的 registry 与 knowledge 后端共用权威人员/资源库。
+# 该容器、网络及数据卷不供其他 deploy 使用。
+services:
+  mysql:
+    build:
+      context: ./mysql
+      args:
+        MYSQL_VERSION: ${MYSQL_VERSION:-8.4}
+    image: phenosolar-dev-mysql:${MYSQL_VERSION:-8.4}
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请先准备 .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-registry}
+      MYSQL_USER: ${MYSQL_USER:-registry}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请先准备 .env}
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-13306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command:
+      - mysqld
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --innodb-buffer-pool-size=256M
+      # 当前两个向量适配器显式重建缓存索引，不使用 online=Y 的 binlog 更新。
+      - --loose-myvector-feature-level=1
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'MYSQL_PWD="$${MYSQL_PASSWORD}" mysql --protocol=TCP -h 127.0.0.1 -u "$${MYSQL_USER}" "$${MYSQL_DATABASE}" -Nse "SELECT 1" >/dev/null'
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 90s
+    mem_limit: 2g
+    stop_grace_period: 1m
+    restart: unless-stopped
+
+volumes:
+  mysql-data:

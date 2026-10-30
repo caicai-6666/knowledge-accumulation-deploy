@@ -14,7 +14,7 @@
 | `init/000-myvector-config.sh` | 首次启动时生成插件内部连接配置，权限为 600、属主为 mysql。 |
 | [init/001-resources.sql](init/001-resources.sql) | 创建最终版本的正式资源表。 |
 | [init/002-myvector-documents.sql](init/002-myvector-documents.sql) | 创建 4096 维 HNSW/Cosine 索引缓存，容量为 10,000。 |
-| [init/003-personnel.sql](init/003-personnel.sql) | 创建顶级部门、员工及平台权限 JSON 存储。 |
+| [init/003-personnel.sql](init/003-personnel.sql) | 创建顶级部门、员工、任职资料、多部门及平台权限 JSON 存储。 |
 | [init/004-platform-admins.sql](init/004-platform-admins.sql) | 创建子平台管理员列表，通过外键关联员工。 |
 | `init/020-myvector-access.sh` | 授权业务账号执行索引构建、状态查询，并设置插件索引目录。 |
 
@@ -76,7 +76,7 @@ ALTER TABLE employees
     );
 ```
 
-新空卷直接使用更新后的 `003-personnel.sql`，不需要额外升级脚本或迁移目录。头像文件由后端存储于 data 数据卷，MySQL 只保存相对地址。
+新空卷直接使用更新后的 `003-personnel.sql`，已包含知识后端 `015` 的 `work_profile` 和 `019` 的 `department_ids` 字段与检查约束，不重复执行这两项迁移。已有卷先检查列及约束，仅对缺失项显式执行知识后端对应迁移；不能用重跑建表脚本升级同名表。部门全文索引 `020` 与知识后端其他业务表仍独立维护。头像文件由后端存储于 data 数据卷，MySQL 只保存相对地址。
 
 ---
 
