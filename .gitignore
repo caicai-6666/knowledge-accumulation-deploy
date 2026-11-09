@@ -4,3 +4,9 @@
 
 # macOS 目录元数据。
 .DS_Store
+
+# 部署时在本目录克隆的独立子项目，不重复纳入 deploy 版本管理。
+/registry-be/
+/registry-fe/
+/knowledge-accumulation-be/
+/knowledge-accumulation-fe/

@@ -17,7 +17,7 @@
 
 镜像还从固定插件镜像复制 `010-myvector-plugin.sql`，安装插件、UDF 和索引管理存储过程，无需在项目中另存副本。
 
-正式资源表只保存审核通过的文件，包含最终申请、审核信息及 JSON 数组通行证；不包含审核状态、推荐列表或消息消费字段。MySQL 不保存待审记录，待审与历史由后端 SQLite 管理，字段定义见[资源表契约](../../registry-be/description/architecture/data/resource.md)。
+正式资源表只保存审核通过的文件，包含最终申请、审核信息及 JSON 数组通行证；不包含审核状态、推荐列表或消息消费字段。MySQL 不保存待审记录，待审与历史由后端 SQLite 管理，字段定义见[资源表契约](../registry-be/description/architecture/data/resource.md)。
 
 ---
 
@@ -46,7 +46,7 @@ Dockerfile 将 `init/` 复制到 `/docker-entrypoint-initdb.d/`；官方入口�
 
 当前目录不再保留历史迁移文件，也不提供旧版 MySQL 表结构的升级命令。新部署直接使用当前初始化定义；已有数据卷不会重新执行脚本，重新构建镜像不修改已有表。旧结构如需继续使用，应先备份并单独制定数据转换方案，不通过删除数据卷更新表结构。
 
-SQLite 的初始化和自动升级由后端独立维护，本次精简不改变其行为。向量查询、快照同步及能力边界见[MyVector 与 vLLM](../../registry-be/description/capability/infrastructure/myvector.md)。
+SQLite 的初始化和自动升级由后端独立维护，本次精简不改变其行为。向量查询、快照同步及能力边界见[MyVector 与 vLLM](../registry-be/description/capability/infrastructure/myvector.md)。
 
 ## 当前结构与维护
 

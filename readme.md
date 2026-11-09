@@ -13,24 +13,36 @@
 部署目录结构如下：
 
 ```text
-知识沉淀注册中心/
+knowledge-accumulation-deploy/
 ├── registry-be/
 ├── registry-fe/
 ├── knowledge-accumulation-be/
 ├── knowledge-accumulation-fe/
-└── knowledge-accumulation-deploy/
-    ├── mysql/
-    │   ├── Dockerfile
-    │   ├── myvector-options.cnf
-    │   └── init/
-    │       ├── 000-myvector-config.sh
-    │       ├── 001-schema.sql
-    │       └── 020-myvector-access.sh
-    ├── docker-compose.yaml
-    └── .env.example
+├── mysql/
+│   ├── Dockerfile
+│   ├── myvector-options.cnf
+│   └── init/
+│       ├── 000-myvector-config.sh
+│       ├── 001-schema.sql
+│       └── 020-myvector-access.sh
+├── docker-compose.yaml
+├── docker-compose.dev.yml
+└── .env.example
 ```
 
-需要 Docker Engine 或 Docker Desktop，以及支持长格式 bind 和 `env_file.format: raw` 的现代 Compose 插件。数据库镜像从[MySQL 镜像项目](mysql/readme.md)构建，后端范围见[项目总览](../registry-be/description/project.md)。
+四个子项目作为独立 Git 仓库克隆到 deploy 根目录内，不把源码重复提交到 deploy，也不使用同级目录作为构建上下文。在 deploy 根目录执行：
+
+```bash
+git clone https://github.com/caicai-6666/registry-be.git registry-be
+git clone https://github.com/caicai-6666/registry-fe.git registry-fe
+git clone https://github.com/caicai-6666/knowledge-accumulation-be.git knowledge-accumulation-be
+git clone https://github.com/caicai-6666/knowledge-accumulation-fe.git knowledge-accumulation-fe
+```
+
+已有目录时进入各子仓库更新到配套版本，不重复克隆。先从两个后端各自的 `.env.example` 准备其 `.env`，再配置 deploy 的 `.env`。所有 Compose 相对路径按 deploy 根目录解析；旧配置中显式填写的 `../registry-be/.env` 和 `../knowledge-accumulation-be/.env` 应分别改为 `./registry-be/.env` 和 `./knowledge-accumulation-be/.env`。本机 IDE 的同级工作区无需搬迁，正式部署按上述布局单独准备。
+
+
+需要 Docker Engine 或 Docker Desktop，以及支持长格式 bind 和 `env_file.format: raw` 的现代 Compose 插件。数据库镜像从[MySQL 镜像项目](mysql/readme.md)构建，后端范围见[项目总览](./registry-be/description/project.md)。
 
 ---
 
@@ -43,7 +55,7 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-已有实际配置时不要覆盖。编辑 `.env`，设置 `MYSQL_ROOT_PASSWORD` 和 `MYSQL_PASSWORD`。后端配置读取 `REGISTRY_BACKEND_ENV_FILE`（默认 `../registry-be/.env`），该文件需事先准备好，并设置 registry 平台和模型服务凭据，按需配置 AUTH_REQUEST_TIMEOUT_SECONDS。无需开发登录或本地头像存储配置；头像代理需核对下表中的知识后端地址，手动刷新已有员工资料时，在后端 `.env` 配置 `DINGTALK_APP_KEY`、`DINGTALK_APP_SECRET`。然后执行：
+已有实际配置时不要覆盖。编辑 `.env`，设置 `MYSQL_ROOT_PASSWORD` 和 `MYSQL_PASSWORD`。后端配置读取 `REGISTRY_BACKEND_ENV_FILE`（默认 `./registry-be/.env`），该文件需事先准备好，并设置 registry 平台和模型服务凭据，按需配置 AUTH_REQUEST_TIMEOUT_SECONDS。无需开发登录或本地头像存储配置；头像代理需核对下表中的知识后端地址，手动刷新已有员工资料时，在后端 `.env` 配置 `DINGTALK_APP_KEY`、`DINGTALK_APP_SECRET`。然后执行：
 
 ```bash
 docker compose config --quiet
@@ -64,10 +76,10 @@ docker compose ps
 | `MYSQL_PASSWORD` | 无，必填 | 业务账号密码。 |
 | `MYSQL_PORT` | `3306` | 宿主机访问端口，仅绑定 `127.0.0.1`。 |
 | `BACKEND_PORT` | `23000` | 后端宿主机端口，仅绑定 `127.0.0.1`；容器内部为 `8000`。 |
-| `REGISTRY_BACKEND_ENV_FILE` | `../registry-be/.env` | registry 实际配置，按 raw 模式注入容器环境。 |
+| `REGISTRY_BACKEND_ENV_FILE` | `./registry-be/.env` | registry 实际配置，按 raw 模式注入容器环境。 |
 | `REGISTRY_FRONTEND_PORT` | `23080` | 注册中心前端端口，仅绑定 `127.0.0.1`，容器内为 `80`。 |
 | `KNOWLEDGE_BACKEND_PORT` | `24000` | 知识后端宿主机端口，仅绑定 `127.0.0.1`；容器内部为 `8000`。 |
-| `KNOWLEDGE_BACKEND_ENV_FILE` | `../knowledge-accumulation-be/.env` | 知识后端实际配置文件，只读挂载，必须可由容器 UID/GID 10001 读取。 |
+| `KNOWLEDGE_BACKEND_ENV_FILE` | `./knowledge-accumulation-be/.env` | 知识后端实际配置文件，只读挂载，必须可由容器 UID/GID 10001 读取。 |
 | `KNOWLEDGE_FRONTEND_PORT` | `24080` | 统一前端宿主机端口，仅绑定 `127.0.0.1`，容器内 Nginx 为 `80`。 |
 | `DINGTALK_CORP_ID` | 无，前端构建及生产登录必填 | 前后端唯一共用的企业公开 CorpId，修改后须重建前端并重新创建知识后端。 |
 | `KNOWLEDGE_ACCUMULATION_BASE_URL` | `http://knowledge-backend:8000` | registry 头像代理的知识后端服务根地址，不包含 API 路径。 |
@@ -79,7 +91,7 @@ Compose 把两个后端的 MySQL 地址固定为 `mysql:3306`，数据库名、�
 
 ## 知识后端配置与启动
 
-先按 [知识后端 Docker 说明](../knowledge-accumulation-be/description/capability/application/docker.md)准备 `KNOWLEDGE_BACKEND_ENV_FILE` 指定的配置。它只读挂载到 `/workspace/.env`，由应用以 `python-dotenv` 解析，保留带引号 JSON 及密钥的语义，不使用 registry 的 raw 环境变量模式。配置不进入镜像，路径缺失时不自动创建目录。Linux 上需为运行 UID/GID `10001:10001` 提供读取权限，例如使用仅部署用户及该组可读的 `0640` 配置副本；不要直接假设属于其他用户的 `0600` 文件可读。
+先按 [知识后端 Docker 说明](./knowledge-accumulation-be/description/capability/application/docker.md)准备 `KNOWLEDGE_BACKEND_ENV_FILE` 指定的配置。它只读挂载到 `/workspace/.env`，由应用以 `python-dotenv` 解析，保留带引号 JSON 及密钥的语义，不使用 registry 的 raw 环境变量模式。配置不进入镜像，路径缺失时不自动创建目录。Linux 上需为运行 UID/GID `10001:10001` 提供读取权限，例如使用仅部署用户及该组可读的 `0640` 配置副本；不要直接假设属于其他用户的 `0600` 文件可读。
 
 知识后端使用自己的 `knowledge-accumulation` 平台凭据。`APP_ENV=production` 时，CorpId 统一取部署 `.env` 的 `DINGTALK_CORP_ID`，AppKey、AppSecret 只从知识后端配置文件读取；开发模式需固定登录凭据。MLLM/Embedding 配置保留在知识后端配置文件，地址必须容器可达。两后端共用权威 MySQL 人员表，知识后端会自动发布用户/管理员全表，因此启动前应完成完整人员数据准备、外部授权及跨后端覆盖协调，并停止旧的同身份本机实例。
 
@@ -89,7 +101,7 @@ Compose 把两个后端的 MySQL 地址固定为 `mysql:3306`，数据库名、�
 
 ### 助理、转换钩子与平台协作
 
-以下变量统一维护在 `KNOWLEDGE_BACKEND_ENV_FILE` 指向的后端配置文件中，完整模板为[知识后端 .env.example](../knowledge-accumulation-be/.env.example)。不要把它们直接复制到 deploy `.env`：Compose 只读挂载后端文件，由应用加载这些变量，不再设置第二份默认值覆盖已有部署选择。
+以下变量统一维护在 `KNOWLEDGE_BACKEND_ENV_FILE` 指向的后端配置文件中，完整模板为[知识后端 .env.example](./knowledge-accumulation-be/.env.example)。不要把它们直接复制到 deploy `.env`：Compose 只读挂载后端文件，由应用加载这些变量，不再设置第二份默认值覆盖已有部署选择。
 
 | 配置项 | 缺省值 | 部署含义 |
 | --- | --- | --- |
@@ -103,7 +115,7 @@ Compose 把两个后端的 MySQL 地址固定为 `mysql:3306`，数据库名、�
 | `PLATFORM_A2A_HTTP_TIMEOUT_SECONDS` | `10` | 单次中间件请求超时。 |
 | `PLATFORM_A2A_MAX_CONCURRENT_REQUESTS` | `16` | 平台协作请求并发上限。 |
 
-启用助理后，转换钩子只注册在助理 `finish_task` 上，工具执行完成后、正常提交前做一次 JSON 正文生成并由本地 Pydantic 严格校验，不发送接口级 `response_format`；转换后的正文统一用于答案、后续上下文和钉钉交付。主助理与转换器共用后端 `VLLM_MLLM_*` 模型服务配置，转换默认开启 medium 推理，服务须支持 `/tokenize`，且地址必须容器可达。转换失败会终止当前任务，不提交原文或自动重跑。该钩子没有新增迁移、独立模型容器或独立服务端口；详见[转换契约](../knowledge-accumulation-be/description/architecture/workflow/question-answering/assistant-message-rendering.md)。
+启用助理后，转换钩子只注册在助理 `finish_task` 上，工具执行完成后、正常提交前做一次 JSON 正文生成并由本地 Pydantic 严格校验，不发送接口级 `response_format`；转换后的正文统一用于答案、后续上下文和钉钉交付。主助理与转换器共用后端 `VLLM_MLLM_*` 模型服务配置，转换默认开启 medium 推理，服务须支持 `/tokenize`，且地址必须容器可达。转换失败会终止当前任务，不提交原文或自动重跑。该钩子没有新增迁移、独立模型容器或独立服务端口；详见[转换契约](./knowledge-accumulation-be/description/architecture/workflow/question-answering/assistant-message-rendering.md)。
 
 新部署的完整初始化已包含助理、跨平台 A2A、当前工作区、员工在职状态、上传文件与个人备忘、独立名称/摘要全文索引、附件交付，以及入站顺序和取消状态。默认关闭的功能仍由配置开关控制，建表不代表启用。
 
@@ -133,7 +145,7 @@ registry 头像代理默认改为同网络内的 `http://knowledge-backend:8000`
 
 ### 知识统一前端
 
-`knowledge-frontend` 从同级 `knowledge-accumulation-fe` 构建，使用该项目的 Dockerfile 和 Nginx 配置。先在部署 `.env` 填写 `DINGTALK_CORP_ID`；Compose 同时将它映射到前端构建参数 `VITE_DINGTALK_CORP_ID` 和知识后端环境变量 `DINGTALK_CORP_ID`，不再维护两份企业标识。该值公开，AppKey、AppSecret 和开发固定凭据不进入前端构建参数。构建上下文不包含前端实际 `.env`，镜像固定使用生产免登。
+`knowledge-frontend` 从部署目录内的 `knowledge-accumulation-fe` 构建，使用该项目的 Dockerfile 和 Nginx 配置。先在部署 `.env` 填写 `DINGTALK_CORP_ID`；Compose 同时将它映射到前端构建参数 `VITE_DINGTALK_CORP_ID` 和知识后端环境变量 `DINGTALK_CORP_ID`，不再维护两份企业标识。该值公开，AppKey、AppSecret 和开发固定凭据不进入前端构建参数。构建上下文不包含前端实际 `.env`，镜像固定使用生产免登。
 
 已有部署配置中的 `VITE_DINGTALK_CORP_ID` 需在实际切换时改名为 `DINGTALK_CORP_ID`；本次不自动修改真实 `.env`。Compose 的共享值覆盖知识后端文件中的同名项，留空不能回退到另一份值；独立运行前端/后端时仍按各自示例配置。修改共享值后重建 `knowledge-frontend` 并重新创建 `knowledge-backend`，保持浏览器构建与服务端一致。
 
@@ -147,7 +159,7 @@ docker compose up -d --no-deps knowledge-frontend
 
 前端访问 `http://127.0.0.1:24080/knowledge-accumulation/`，生产路径不含 `/dev`。容器内 API 保留 `/knowledge-accumulation/api/` 转发至 `knowledge-backend:8000`，不通过宿主机端口；SSE 关闭响应缓冲和缓存，读取空闲超时 3600 秒。`/healthz` 仅检查静态 Web 入口。
 
-前端带哈希构建资源（含图标）缓存一年，无哈希公共图标缓存 7 天；首页和图标缓存脚本每次校验更新。外站链接图标继续使用浏览器 Service Worker 的 7 天、48 项缓存。头像与附件等鉴权 API 不进入公共缓存。完整规则见[前端部署说明](../knowledge-accumulation-fe/description/platform/deployment.md)。
+前端带哈希构建资源（含图标）缓存一年，无哈希公共图标缓存 7 天；首页和图标缓存脚本每次校验更新。外站链接图标继续使用浏览器 Service Worker 的 7 天、48 项缓存。头像与附件等鉴权 API 不进入公共缓存。完整规则见[前端部署说明](./knowledge-accumulation-fe/description/platform/deployment.md)。
 
 统一前端的管理平台按需加载、目录后台复核和静态资源压缩随前端镜像发布，不需要修改 Compose 服务、端口或增加环境变量，也不涉及数据库迁移。Vite 的 gzip/Brotli 与预热仅用于开发；生产容器使用 Nginx gzip 压缩静态文本，API/SSE 显式关闭压缩并保留无缓冲转发。前端新增的 Vite 配置模块已纳入 Git 和 Docker 构建上下文；应同时更新前端仓库与部署文档，不能只拉取 deploy。
 
@@ -161,7 +173,7 @@ docker compose up -d --no-deps knowledge-frontend
 
 ### 注册中心前端
 
-`registry-frontend` 从同级 `registry-fe` 构建，容器 Nginx 通过 `backend:8000` 原样代理 `/knowledge-accumulation/registry/api/`，不向浏览器注入平台密钥或模型配置。启动或更新：
+`registry-frontend` 从部署目录内的 `registry-fe` 构建，容器 Nginx 通过 `backend:8000` 原样代理 `/knowledge-accumulation/registry/api/`，不向浏览器注入平台密钥或模型配置。启动或更新：
 
 ```bash
 docker compose config --quiet
@@ -170,7 +182,7 @@ docker compose up -d --build --wait registry-frontend
 
 访问 `http://127.0.0.1:23080/knowledge-accumulation/registry/`，`/healthz` 只检查静态入口。外层 HTTPS 网关需将更具体的 `/knowledge-accumulation/registry/` 优先转发到此端口，保留完整路径和鉴权头；页面与知识统一入口须共用同一源，才能读取统一入口保存的 `access_token`。本机不同端口直连仅适合静态检查，不共享浏览器存储。
 
-若此前已通过 `registry-fe/docker-compose.yaml` 独立运行前端，启用本服务前先停止该前端容器，避免默认 `23080` 端口冲突；也可继续独立部署，不启动本服务。网关配置见[注册中心前端部署](../registry-fe/description/platform/deployment.md#域名网关与映射)。
+若此前已通过 `registry-fe/docker-compose.yaml` 独立运行前端，启用本服务前先停止该前端容器，避免默认 `23080` 端口冲突；也可继续独立部署，不启动本服务。网关配置见[注册中心前端部署](./registry-fe/description/platform/deployment.md#域名网关与映射)。
 
 ### 其他服务
 
@@ -224,7 +236,7 @@ MySQL 数据目录 `/var/lib/mysql` 挂载到命名卷 `mysql-data`，默认完�
 
 MySQL 的 departments、employees 和 platform_admins 仍需保留：首次员工初始化由知识后端写入，registry 查询同一权威人员源并负责后续权限与管理关系维护。知识后端应连接此处同一人员表/schema（账号可以不同），不能建立互相分叉的权限副本。当前未增加独立人员库连接配置，也未替知识后端改动实际数据库地址或执行生产数据迁移；知识后端旧全表快照覆盖并发权限更新的边界仍需在真实切换前处理。
 
-可信后台原件下载还依赖中间件 `POST /middleware-service/api/platform/token/verify` 只读校验能力，调用方固定为 `knowledge-accumulation` 平台；知识后端通过 Compose 注入的 `REGISTRY_BASE_URL=http://backend:8000` 访问。接口缺失或校验依赖故障时拒绝下载，不需要另设共享文件密钥。完整边界见[原件接口](../registry-be/description/api/resource.md)。
+可信后台原件下载还依赖中间件 `POST /middleware-service/api/platform/token/verify` 只读校验能力，调用方固定为 `knowledge-accumulation` 平台；知识后端通过 Compose 注入的 `REGISTRY_BASE_URL=http://backend:8000` 访问。接口缺失或校验依赖故障时拒绝下载，不需要另设共享文件密钥。完整边界见[原件接口](./registry-be/description/api/resource.md)。
 
 修改后重建后端，不删除数据卷：
 
@@ -245,11 +257,11 @@ registry 重建不自行撤销中央用户 token；平台会话重新建立前�
 
 目录占位不进入镜像，也不替代数据卷；后端运行时会创建正式文件和审核暂存目录，SQLite 启动时创建或升级。不能通过提交数据库或原件来预置部署数据。
 
-头像代理通过 `KNOWLEDGE_ACCUMULATION_BASE_URL` 访问知识后端，转发用户 Bearer token，不挂载知识后端头像目录。当前默认使用同一 Compose 网络的 `knowledge-backend:8000`；若显式改为宿主机服务，须监听容器可达接口，只监听 `127.0.0.1` 可能导致代理 503。头像缓存时长等参数读取 registry 后端 `.env`，见[头像代理配置](../registry-be/description/capability/infrastructure/avatar.md#配置与生命周期)。
+头像代理通过 `KNOWLEDGE_ACCUMULATION_BASE_URL` 访问知识后端，转发用户 Bearer token，不挂载知识后端头像目录。当前默认使用同一 Compose 网络的 `knowledge-backend:8000`；若显式改为宿主机服务，须监听容器可达接口，只监听 `127.0.0.1` 可能导致代理 503。头像缓存时长等参数读取 registry 后端 `.env`，见[头像代理配置](./registry-be/description/capability/infrastructure/avatar.md#配置与生命周期)。
 
-知识后端镜像另包含模型工具模板，不再携带历史 SQL 迁移文件，详见[知识后端构建边界](../knowledge-accumulation-be/description/capability/application/docker.md)。两个后端均不将真实数据和实际配置复制进镜像。
+知识后端镜像另包含模型工具模板，不再携带历史 SQL 迁移文件，详见[知识后端构建边界](./knowledge-accumulation-be/description/capability/application/docker.md)。两个后端均不将真实数据和实际配置复制进镜像。
 
-摘要向量采用固定中文指令“检索与这份摘要语义相关的文本。”，候选 HNSW 缓存会基于现有摘要重新生成向量；首次搜索可能产生模型调用并增加等待时间，不要求部署时执行实验或迁移脚本。具体行为见[向量服务](../registry-be/description/capability/infrastructure/myvector.md)。
+摘要向量采用固定中文指令“检索与这份摘要语义相关的文本。”，候选 HNSW 缓存会基于现有摘要重新生成向量；首次搜索可能产生模型调用并增加等待时间，不要求部署时执行实验或迁移脚本。具体行为见[向量服务](./registry-be/description/capability/infrastructure/myvector.md)。
 
 ---
 

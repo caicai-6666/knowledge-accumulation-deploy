@@ -3,12 +3,12 @@ name: registry
 services:
   backend:
     build:
-      context: ../registry-be
+      context: ./registry-be
       dockerfile: Dockerfile
     image: registry-be:dev
     env_file:
       # 原样传递实际配置，避免密钥中的 $ 被 Compose 插值。
-      - path: ${REGISTRY_BACKEND_ENV_FILE:-../registry-be/.env}
+      - path: ${REGISTRY_BACKEND_ENV_FILE:-./registry-be/.env}
         format: raw
     environment:
       # 容器使用生产路径，避免实际配置中的开发前缀进入部署。
@@ -40,7 +40,7 @@ services:
 
   registry-frontend:
     build:
-      context: ../registry-fe
+      context: ./registry-fe
       dockerfile: Dockerfile
     image: registry-fe:dev
     environment:
@@ -57,7 +57,7 @@ services:
 
   knowledge-backend:
     build:
-      context: ../knowledge-accumulation-be
+      context: ./knowledge-accumulation-be
       dockerfile: Dockerfile
     image: knowledge-accumulation-be:dev
     environment:
@@ -88,7 +88,7 @@ services:
       # 应用自行用 python-dotenv 解析，保留现有带引号 JSON 和密钥的语义。
       # 助理转换档位、模型准备重试和 A2A 参数也从此文件读取，不另设 Compose 默认值覆盖。
       - type: bind
-        source: ${KNOWLEDGE_BACKEND_ENV_FILE:-../knowledge-accumulation-be/.env}
+        source: ${KNOWLEDGE_BACKEND_ENV_FILE:-./knowledge-accumulation-be/.env}
         target: /workspace/.env
         read_only: true
         bind:
@@ -105,7 +105,7 @@ services:
 
   knowledge-frontend:
     build:
-      context: ../knowledge-accumulation-fe
+      context: ./knowledge-accumulation-fe
       dockerfile: Dockerfile
       args:
         VITE_DINGTALK_CORP_ID: ${DINGTALK_CORP_ID:-}
