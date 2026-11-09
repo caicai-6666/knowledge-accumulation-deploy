@@ -155,6 +155,14 @@ docker compose up -d --no-deps knowledge-frontend
 
 前端带哈希构建资源（含图标）缓存一年，无哈希公共图标缓存 7 天；首页和图标缓存脚本每次校验更新。外站链接图标继续使用浏览器 Service Worker 的 7 天、48 项缓存。头像与附件等鉴权 API 不进入公共缓存。完整规则见[前端部署说明](../knowledge-accumulation-fe/description/platform/deployment.md)。
 
+统一前端的管理平台按需加载、目录后台复核和静态资源压缩随前端镜像发布，不需要修改 Compose 服务、端口或增加环境变量，也不涉及数据库迁移。Vite 的 gzip/Brotli 与预热仅用于开发；生产容器使用 Nginx gzip 压缩静态文本，API/SSE 显式关闭压缩并保留无缓冲转发。前端新增的 Vite 配置模块已纳入 Git 和 Docker 构建上下文；应同时更新前端仓库与部署文档，不能只拉取 deploy。
+
+发布前先在两个仓库确认工作区状态，再分别执行 `git pull --ff-only`，核对部署 `.env` 已有公开 `DINGTALK_CORP_ID`，通过 `docker compose config --quiet`；不要输出完整展开配置。仅更新统一前端时按上述命令构建并用 `--no-deps` 替换前端，其他服务无需重建。
+
+如已有运行中的统一前端，构建前记录其镜像 ID，并为该 ID 添加一个本次发布专用的本地回滚标签。保留旧镜像直到验收完成；需要回滚时，将旧镜像重新标记为 `knowledge-accumulation-fe:dev`，再运行 `docker compose up -d --no-deps --no-build --force-recreate knowledge-frontend`。回滚只替换前端容器，不操作数据卷。
+
+更新后确认容器健康及 `/healthz` 返回 200；从首页实际引用的带哈希 JS/CSS URL 检查 `Accept-Encoding: gzip` 请求返回 `Content-Encoding: gzip` 和 `Vary`，缺失资源应返回 404。随后验证生产路径下的钉钉登录、管理平台首次打开与切页缓存，以及问答 SSE 首条事件即时到达。静态健康检查不能代替这些业务验收，公网与钉钉实机仍须在目标环境完成。
+
 外层网关需保留路径并将 `/knowledge-accumulation/` 转发至前端端口，同时为 SSE 关闭缓冲。注册中心和合同平台的更深前缀需优先路由到各自前端；注册中心前端由下节的 `registry-frontend` 提供，合同平台仍由其独立部署提供，统一入口容器对这两个前缀返回 404。Compose 正常启动前端会等待知识后端健康；更新现有前端使用上面的 `--no-deps` 命令，避免连带启动后端生命周期。
 
 ### 注册中心前端
