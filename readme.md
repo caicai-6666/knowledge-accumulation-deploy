@@ -247,7 +247,7 @@ registry 重建不自行撤销中央用户 token；平台会话重新建立前�
 
 头像代理通过 `KNOWLEDGE_ACCUMULATION_BASE_URL` 访问知识后端，转发用户 Bearer token，不挂载知识后端头像目录。当前默认使用同一 Compose 网络的 `knowledge-backend:8000`；若显式改为宿主机服务，须监听容器可达接口，只监听 `127.0.0.1` 可能导致代理 503。头像缓存时长等参数读取 registry 后端 `.env`，见[头像代理配置](../registry-be/description/capability/infrastructure/avatar.md#配置与生命周期)。
 
-知识后端镜像另包含模型工具模板和 SQL 迁移文件，详见[知识后端构建边界](../knowledge-accumulation-be/description/capability/application/docker.md)。两个后端均不将真实数据和实际配置复制进镜像。
+知识后端镜像另包含模型工具模板，不再携带历史 SQL 迁移文件，详见[知识后端构建边界](../knowledge-accumulation-be/description/capability/application/docker.md)。两个后端均不将真实数据和实际配置复制进镜像。
 
 摘要向量采用固定中文指令“检索与这份摘要语义相关的文本。”，候选 HNSW 缓存会基于现有摘要重新生成向量；首次搜索可能产生模型调用并增加等待时间，不要求部署时执行实验或迁移脚本。具体行为见[向量服务](../registry-be/description/capability/infrastructure/myvector.md)。
 
