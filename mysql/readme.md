@@ -12,10 +12,7 @@
 | `.dockerignore` | 构建上下文仅包含镜像与初始化所需文件。 |
 | `myvector-options.cnf` | 将插件索引目录设置到 `/var/lib/mysql`，与数据卷一起保留。 |
 | `init/000-myvector-config.sh` | 首次启动时生成插件内部连接配置，权限为 600、属主为 mysql。 |
-| [init/001-resources.sql](init/001-resources.sql) | 创建最终版本的正式资源表。 |
-| [init/002-myvector-documents.sql](init/002-myvector-documents.sql) | 创建 4096 维 HNSW/Cosine 索引缓存，容量为 10,000。 |
-| [init/003-personnel.sql](init/003-personnel.sql) | 创建顶级部门、员工、任职资料、多部门及平台权限 JSON 存储。 |
-| [init/004-platform-admins.sql](init/004-platform-admins.sql) | 创建子平台管理员列表，通过外键关联员工。 |
+| [init/001-schema.sql](init/001-schema.sql) | 唯一业务库初始化：注册中心、共享人员、探索问答、个人助理、A2A、文件备忘与向量缓存，共 26 张表。 |
 | `init/020-myvector-access.sh` | 授权业务账号执行索引构建、状态查询，并设置插件索引目录。 |
 
 镜像还从固定插件镜像复制 `010-myvector-plugin.sql`，安装插件、UDF 和索引管理存储过程，无需在项目中另存副本。
@@ -51,46 +48,24 @@ Dockerfile 将 `init/` 复制到 `/docker-entrypoint-initdb.d/`；官方入口�
 
 SQLite 的初始化和自动升级由后端独立维护，本次精简不改变其行为。向量查询、快照同步及能力边界见[MyVector 与 vLLM](../../registry-be/description/capability/infrastructure/myvector.md)。
 
-部门和员工定义见[公司部门与员工契约](../../registry-be/description/architecture/data/employee.md)。已有数据库补建这两张新表时，可在 `knowledge-accumulation-deploy` 目录执行以下命令；该脚本只补建缺失表，不修改资源数据或升级已有同名表：
+## 当前结构与维护
 
-```bash
-docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysql --user="$MYSQL_USER" --database="$MYSQL_DATABASE" --default-character-set=utf8mb4' < mysql/init/003-personnel.sql
-```
+唯一业务库脚本为 `init/001-schema.sql`，直接创建最终结构，不串联历史 ALTER，也不禁用外键检查。覆盖知识后端 `schema/001–029` 的最终结果，以及原有资源、向量缓存、共享人员和管理员表。画像私有序号初始化为 `(id=1, next_key=1)`，其余业务表为空。
 
-已有员工表后，补建子平台管理员表：
+- 员工包含任职资料、多部门和 `employment_status`（默认 `employed`，离职为 `resigned`）。
+- 问答包含生命周期、消息、生成记录、记忆、全文及向量缓存。
+- 个人助理包含工作区、画像、提醒、交付、入站顺序与取消约束、上传文件和个人备忘；名称与摘要具有独立 ngram 全文索引。
+- 资源保留有符号 `file_level BIGINT NULL`，SQLite 审核状态仍由 registry 后端管理。
+- 两张 MyVector 缓存使用 4096 维、HNSW/Cosine、容量 10,000；建表不调用模型，不自动构建向量索引。运行配置须与维度一致。
 
-```bash
-docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysql --user="$MYSQL_USER" --database="$MYSQL_DATABASE" --default-character-set=utf8mb4' < mysql/init/004-platform-admins.sql
-```
+后续数据库契约变更须同步此脚本。知识后端历史 SQL 保留供开发库升级与追溯，新部署不执行它们，也不运行旧工作区数据迁移器。此脚本不包含真实员工、权限、消息或附件，不从开发数据库导出业务数据。
 
-已使用旧版员工表、尚未添加姓名和头像列的数据库，应先确认 `SHOW COLUMNS FROM employees` 结果，再一次性执行以下补列操作。当前开发库已补齐，不要重复执行；现有员工资料保持为空，不重置权限：
-
-```sql
-ALTER TABLE employees
-    ADD COLUMN name VARCHAR(200) NULL COMMENT '钉钉员工姓名，历史未补全时为空' AFTER userid,
-    ADD COLUMN avatar_url VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL
-        COMMENT '头像相对 data 的地址，未设置头像时为空' AFTER name,
-    ADD CONSTRAINT chk_employees_name CHECK (name IS NULL OR CHAR_LENGTH(TRIM(name)) > 0),
-    ADD CONSTRAINT chk_employees_avatar_url CHECK (
-        avatar_url IS NULL OR REGEXP_LIKE(avatar_url, '^user/avatar/[a-f0-9]{32}[.]webp$', 'c')
-    );
-```
-
-新空卷直接使用更新后的 `003-personnel.sql`，已包含知识后端 `015` 的 `work_profile` 和 `019` 的 `department_ids` 字段与检查约束，不重复执行这两项迁移。已有卷先检查列及约束，仅对缺失项显式执行知识后端对应迁移；不能用重跑建表脚本升级同名表。部门全文索引 `020` 与知识后端其他业务表仍独立维护。头像文件由后端存储于 data 数据卷，MySQL 只保存相对地址。
+首次部署先执行 `docker compose up -d --build --wait mysql`，完成初始化后再启动后端。已有数据目录不会重新执行；不要为了更新结构删除现有数据卷。现有开发库及数据保持不变。
 
 ---
 
-## 文件等级字段
+## 验证
 
-`init/001-resources.sql` 的最终定义增加 `resources.file_level BIGINT NULL`，新批准存入审核员明确给出的等级，已有未知等级保持 NULL。有符号 64 位整数范围与后端审核参数及 SQLite 一致，不在存储层定义具体等级枚举。
+2026-11-09 在无网络、临时内存数据目录的 MySQL 8.4 容器中，以原部署定义及知识后端历史迁移构建基准，再向另一空库执行合并脚本。逐表比较 26 张表的 `SHOW CREATE TABLE`（字段、索引、外键、检查约束）及初始记录，全部一致，画像序号初值为 1。此验证不代表生产模型、钉钉或中间件已联通。
 
-已有卷不会重新执行初始化；先检查列是否存在，缺失时仅执行：
-
-```sql
-ALTER TABLE resources
-    ADD COLUMN file_level BIGINT NULL
-    COMMENT '入库审核确定的文件等级，历史未知时为空；有符号 64 位整数'
-    AFTER embedding;
-```
-
-该操作不清空原表，不更新历史行的等级值；后端不在启动时执行 MySQL 建表或 ALTER。SQLite 审核表由后端升级至版本 9，审核决定、历史与恢复语义见[入库审核契约](../../registry-be/description/api/ingestion-review.md)。
+另使用现有 MySQL 8.4.13 镜像的官方入口，在隔离空数据目录中装入最新 SQL，完成插件配置、全部业务建表、插件安装及业务账号授权；验证 26 张表可由业务账号访问，画像序号为 1，MyVector 状态为 `ACTIVE`。生产及开发 Compose 均通过 `config --quiet`。未重建正式镜像或启动正式服务。

@@ -24,10 +24,7 @@
     │   ├── myvector-options.cnf
     │   └── init/
     │       ├── 000-myvector-config.sh
-    │       ├── 001-resources.sql
-    │       ├── 002-myvector-documents.sql
-    │       ├── 003-personnel.sql
-    │       ├── 004-platform-admins.sql
+    │       ├── 001-schema.sql
     │       └── 020-myvector-access.sh
     ├── docker-compose.yaml
     └── .env.example
@@ -88,7 +85,7 @@ Compose 把两个后端的 MySQL 地址固定为 `mysql:3306`，数据库名、�
 
 知识后端的注册中心文件读取地址由 Compose 固定为 `REGISTRY_BASE_URL=http://backend:8000`。文件查询的 `FILE_SOURCE_MYSQL_HOST/PORT` 覆盖为 `mysql:3306`，`FILE_SOURCE_MYSQL_DATABASE/USER/PASSWORD` 复用本部署的 `MYSQL_DATABASE/USER/PASSWORD`，不需要新增一组配置。上述环境变量覆盖挂载后端配置中的本机地址及连接项，保证文件查询、权限校验和 registry 使用同一权威源；不创建额外检索表或修改数据库权限。
 
-首次 MySQL 初始化只含部署项目已有人员和资源表。问答表仍需显式执行知识后端 `schema/` 的 `001`、`002`、`004`、`006`、`007`、`008`、`009`、`010`；可选索引 `003`、`005` 及旧库回填前提见知识后端文档。先构建 `docker compose build knowledge-backend`，镜像中的 `/workspace/schema/` 提供迁移源；构建或启动不会自动执行迁移。已有表不能重复执行新库初始化，健康检查也不验证业务表结构。
+首次空卷由 [mysql/init/001-schema.sql](mysql/init/001-schema.sql) 一次创建当前全部业务结构，覆盖注册中心与知识后端 `001–029` 的最终表、索引和约束，以及画像序号初值。无需再执行知识后端历史迁移或工作区数据迁移器；完整边界见 [MySQL 初始化说明](mysql/readme.md#初始化与数据边界)。已有卷不会重新初始化，禁止把此脚本作为升级脚本。
 
 ### 助理、转换钩子与平台协作
 
@@ -108,12 +105,9 @@ Compose 把两个后端的 MySQL 地址固定为 `mysql:3306`，数据库名、�
 
 启用助理后，转换钩子只注册在助理 `finish_task` 上，工具执行完成后、正常提交前做一次 JSON 正文生成并由本地 Pydantic 严格校验，不发送接口级 `response_format`；转换后的正文统一用于答案、后续上下文和钉钉交付。主助理与转换器共用后端 `VLLM_MLLM_*` 模型服务配置，转换默认开启 medium 推理，服务须支持 `/tokenize`，且地址必须容器可达。转换失败会终止当前任务，不提交原文或自动重跑。该钩子没有新增迁移、独立模型容器或独立服务端口；详见[转换契约](../knowledge-accumulation-be/description/architecture/workflow/question-answering/assistant-message-rendering.md)。
 
-升级已有助理部署时，按部署环境实际结构确认以下前提；不要因为本机已完成迁移而跳过其他环境，也不要盲目重复执行建表 SQL：
+新部署的完整初始化已包含助理、跨平台 A2A、当前工作区、员工在职状态、上传文件与个人备忘、独立名称/摘要全文索引、附件交付，以及入站顺序和取消状态。默认关闭的功能仍由配置开关控制，建表不代表启用。
 
-- 助理、消费、目录、入站及员工背景/画像依赖 `011`—`017`；详见[助理存储](../knowledge-accumulation-be/description/architecture/data/assistant-storage.md)及[个人背景与画像](../knowledge-accumulation-be/description/architecture/workflow/question-answering/assistant-personal-context.md)。
-- 当前 `003-personnel.sql` 已包含 `015` 任职资料和 `019` 多部门字段，新空卷跳过这两项；旧卷先检查列和约束，缺失时分别显式执行 `015`、`019`，不要重复补列。其他 `011`—`017` 表仍按需迁移；部门全文索引 `020` 仍需单独执行，均作用于共享人员库。
-- 当前助理工作区依赖 `021`，旧部署须先备份并停止所有助理写入，再显式执行 DDL 和 `python -m app.repository.assistant_memory_migration`。迁移涉及旧工作区快照清理，按[助理记忆迁移说明](../knowledge-accumulation-be/description/architecture/workflow/question-answering/assistant-memory.md#显式迁移与部署)执行，Compose 不代为执行。
-- 启用 A2A 时另需 `018`；见[跨平台协作](../knowledge-accumulation-be/description/architecture/workflow/question-answering/platform-a2a.md)。
+钉钉引用用户/助理消息及富文本适配无需新增环境变量、服务或端口。代码通过镜像打包，更新时执行 `docker compose up -d --build --wait knowledge-backend`，仅重启旧容器不会更新代码。已有数据库的结构升级需按实际状态另行安排，不能重跑空库初始化。
 
 缺失配置项可按模板补齐；本次开启转换推理须将后端配置中的 `ASSISTANT_RENDERING_THINKING_EFFORT` 显式设为 `medium`，仅更新模板不会覆盖已有 `none`。其余开关、地址、凭据和自定义值应保留。修改文件后需重新创建/启动知识后端才能加载；执行前停止使用同一平台身份的 IDE 进程，避免双实例争用。Docker HTTP 健康检查只证明 Web 入口可用，不能证明模型、机器人及中间件已联通。
 
@@ -212,7 +206,7 @@ MySQL 数据目录 `/var/lib/mysql` 挂载到命名卷 `mysql-data`，默认完�
 
 官方镜像只在空数据目录上创建数据库和账号，并执行镜像内 `mysql/init/` 的 SQL 建立 `resources` 表及 MyVector 索引缓存，安装插件。后端不负责建表。已有数据卷时，修改 `.env` 中的初始化变量不会自动修改现有数据库或密码，需要通过数据库管理操作完成变更。
 
-同目录的 `003-personnel.sql` 创建供知识后端初始化、registry 管理权限时共用的 `departments` 与 `employees` 表，`004-platform-admins.sql` 随后创建关联员工的子平台管理员表；已有卷的结构处理边界见 [MySQL 镜像说明](mysql/readme.md#初始化与数据边界)。字段与权限映射见[公司部门与员工契约](../registry-be/description/architecture/data/employee.md)。
+统一初始化脚本同时创建共享人员、部门、子平台管理员以及知识后端业务表；见 [MySQL 镜像说明](mysql/readme.md#初始化与数据边界)。员工状态字段统一采用 `employment_status`，默认 `employed`，离职为 `resigned`。
 
 ---
 
@@ -263,13 +257,13 @@ registry 重建不自行撤销中央用户 token；平台会话重新建立前�
 
 `resources` 仅保存已入库文件及已通过的申请、审核备注，不保存 status 和推荐列表。入库暂存、删除申请、审核状态及推荐列表保存在后端 SQLite，通过资源 ID 关联。
 
-MySQL 只保留当前初始化定义：`mysql/init/001-resources.sql` 创建最终版本的正式资源表，`mysql/init/002-myvector-documents.sql` 创建索引缓存；插件配置、安装与授权随空卷首次初始化完成。SQLite 的建表与自动升级由后端独立负责。
+MySQL 业务库仅保留 [mysql/init/001-schema.sql](mysql/init/001-schema.sql) 一份最新初始化定义；插件配置、安装与授权保持独立，随空卷首次初始化完成。SQLite 的建表与自动升级由后端独立负责。
 
 已移除历史 MySQL 迁移目录及对应升级工具。部署不需要依次执行旧版本变更；已有卷不会因修改初始化文件或重建镜像而自动变更表结构。旧结构如需继续使用，先备份并单独制定转换方案，不直接对含数据的旧库执行当前建表 SQL 作为升级。
 
 
 ---
 
-## 员工多部门迁移
+## 员工资料初始化
 
-当前新空卷的 `003-personnel.sql` 已包含 `work_profile`、`department_ids` 及对应约束，不再执行知识后端 `015`、`019` 补列迁移。已有卷在部署新代码前检查共享人员库结构，缺少任职资料时执行一次 `../knowledge-accumulation-be/schema/015-employee-work-profile.sql`，缺少多部门字段时执行一次 `../knowledge-accumulation-be/schema/019-employee-departments.sql`；应用启动不会自动迁移。新增可空JSON列 `employees.department_ids` 和检查约束，不覆盖已有员工数据，NULL历史记录读取时回退旧单值。新代码写完整列表；`department_id`仅作旧客户端兼容，展示全部部门须使用新列表字段。
+新空卷已包含 `work_profile`、`department_ids`、`employment_status` 和相应检查约束、人员及部门全文索引。`department_id` 保留旧客户端兼容；新代码写完整部门列表，历史 NULL 列表读取时回退旧单值。初始化不创建真实员工，不重置权限；正式启用前仍需准备权威人员数据。
