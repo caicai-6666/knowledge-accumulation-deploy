@@ -216,7 +216,6 @@ CREATE TABLE `assistants` (
   `tree_id` char(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `tree_kind` enum('assistant','exploration') NOT NULL DEFAULT 'assistant',
   `enabled` tinyint(1) NOT NULL DEFAULT '1',
-  `heartbeat_interval_seconds` int NOT NULL DEFAULT '-1',
   `created_at` datetime(6) NOT NULL,
   `updated_at` datetime(6) NOT NULL,
   PRIMARY KEY (`userid`),
@@ -227,9 +226,8 @@ CREATE TABLE `assistants` (
   CONSTRAINT `fk_assistant_tree_identity` FOREIGN KEY (`tree_id`, `userid`, `tree_kind`) REFERENCES `question_trees` (`id`, `owner_userid`, `kind`),
   CONSTRAINT `assistants_chk_1` CHECK ((`tree_kind` = _utf8mb4'assistant')),
   CONSTRAINT `assistants_chk_2` CHECK ((`enabled` in (0,1))),
-  CONSTRAINT `assistants_chk_3` CHECK (((`heartbeat_interval_seconds` = -(1)) or (`heartbeat_interval_seconds` > 0))),
-  CONSTRAINT `assistants_chk_4` CHECK ((char_length(trim(`userid`)) > 0)),
-  CONSTRAINT `assistants_chk_5` CHECK ((`updated_at` >= `created_at`))
+  CONSTRAINT `assistants_chk_3` CHECK ((char_length(trim(`userid`)) > 0)),
+  CONSTRAINT `assistants_chk_4` CHECK ((`updated_at` >= `created_at`))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- employees

@@ -114,6 +114,7 @@ docker compose ps
 | `KNOWLEDGE_ASSISTANT_ENABLED` | `false` | 启用个人助理消费、钉钉 Stream 入站、提醒及心跳；启用前准备机器人凭据和助理表。 |
 | `KNOWLEDGE_ASSISTANT_MODEL_RETRY_SECONDS` | `30` | 尚未开始生成时，模型准备暂不可用的重试间隔；不重试已经执行后失败的任务。 |
 | `KNOWLEDGE_ASSISTANT_RENDERING_THINKING_EFFORT` | `medium` | finish_task 转换默认开启 medium 推理；可选 none / low / medium / xhigh，与主助理独立。 |
+| `KNOWLEDGE_ASSISTANT_HEARTBEAT_INTERVAL_SECONDS` | `-1` | 全局个人助理心跳间隔；-1 关闭，正整数统一应用于所有已启用助理。 |
 | `KNOWLEDGE_PLATFORM_A2A_ENABLED` | `false` | 启用跨平台协作；需中间件平台会话及 018 表。 |
 | `KNOWLEDGE_PLATFORM_A2A_RESPONSE_BUFFER_SECONDS` | `5` | 广播发布后的响应缓冲，必须小于整轮等待预算。 |
 | `KNOWLEDGE_PLATFORM_A2A_WAIT_SECONDS` | `90` | 整轮等待预算。 |
