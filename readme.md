@@ -286,3 +286,35 @@ MySQL 业务库仅保留 [mysql/init/001-schema.sql](mysql/init/001-schema.sql) 
 ## 员工资料初始化
 
 新空卷已包含 `work_profile`、`department_ids`、`employment_status` 和相应检查约束、人员及部门全文索引。`department_id` 保留旧客户端兼容；新代码写完整部门列表，历史 NULL 列表读取时回退旧单值。初始化不创建真实员工，不重置权限；正式启用前仍需准备权威人员数据。
+
+
+---
+
+## 附件转换与探索上传
+
+知识后端镜像安装 LibreOffice Writer/Calc、字体和 olefile，复制 `assets/fonts/` 中的中文字体与许可证。个人助理和探索上传共用独立图片、Word、Excel 转换器，成功后只持久保存 PDF；不新增容器、端口或数据库表。更新必须重建后端镜像，不能仅 restart。
+
+| deploy 配置 | 注入知识后端 | 默认值 |
+| --- | --- | --- |
+| `KNOWLEDGE_OFFICE_CONVERTER_EXECUTABLE` | `OFFICE_CONVERTER_EXECUTABLE` | `/usr/bin/soffice`，必须为容器内路径；留空可自动查找。 |
+| `KNOWLEDGE_PDF_MAX_VISUAL_TOKENS_PER_PAGE` | `PDF_MAX_VISUAL_TOKENS_PER_PAGE` | `2048`，正整数，控制 PDF 单页图片分辨率。 |
+
+已有部署需在根 `.env` 补齐两项；配置变更需重新创建后端。此视觉预算不等于模型实际计费 token，已驻留文件需随服务重启重新加载。
+
+探索原始附件最多 10 份、每份 10 MiB、合计 20 MiB，转换后的 PDF 同样受此大小限制。前端提交原件，注册请求等待整批转换后才返回 201，随后订阅 SSE。转换失败返回 422、大小超限返回 413、依赖不可用或繁忙返回 503；失败不替代旧任务。支持格式与转换规则见[后端附件说明](./knowledge-accumulation-be/description/capability/application/attachment-conversion.md)。
+
+网关请求体限制应至少 22 MiB，为 20 MiB 附件、问题正文和 multipart 留出空间；注册接口读取超时建议不少于 1800 秒，避免较慢 Office 批量转换被提前截断。知识前端镜像的 Nginx 已使用 22 MiB 请求体上限和 3600 秒读取超时；外部 HTTPS 网关需按其独立部署配置核对，不能仅调整浏览器等待时间。POST 不自动重试。
+
+```bash
+docker compose config --quiet
+docker compose up -d --build --wait knowledge-backend knowledge-frontend
+```
+
+2026-11-13 同步配置与文档，同时补齐实际配置中缺失的全局助理心跳间隔 `KNOWLEDGE_ASSISTANT_HEARTBEAT_INTERVAL_SECONDS=300`。实际生产配置、使用合成密码的模板配置、开发 Compose 均通过 `config --quiet`；解析结果确认转换路径、视觉预算及心跳值正确，新增参数仅注入知识后端。未修改已有数据库或运行数据，未重建镜像或重启服务。
+
+
+### 工具失败分层升级
+
+知识后端的明确工具执行失败现返回失败回执供主模型继续处理，连续参数纠错仍受上限约束；取消、宿主失效、审计故障及写入不确定保持停止。正文转换明确失败不会登记发送原文或附件，后续成功后才交付。更新仅随知识后端源码进入镜像，无新增环境变量、SQL 或服务；执行 `docker compose up -d --build --wait knowledge-backend` 才能加载新代码。
+
+2026-11-14 文档与配置复核：Compose 已完整映射知识后端 `.env.example` 中的参数，实际 deploy `.env` 无缺项；转换路径、视觉预算和全局心跳已有配置。本次仅同步说明，不重建镜像、重启服务或运行数据库初始化。
