@@ -349,7 +349,7 @@ CREATE TABLE `assistant_task_executions` (
   CONSTRAINT `fk_assistant_execution_owner` FOREIGN KEY (`userid`, `tree_id`) REFERENCES `assistants` (`userid`, `tree_id`),
   CONSTRAINT `assistant_task_executions_chk_1` CHECK ((char_length(trim(`task_id`)) > 0)),
   CONSTRAINT `assistant_task_executions_chk_10` CHECK (((`finished_at` is null) or ((`finished_at` >= `received_at`) and (`finished_at` <= `updated_at`)))),
-  CONSTRAINT `assistant_task_executions_chk_11` CHECK (((`processing_status` not in (_utf8mb4'running',_utf8mb4'completed')) or (`node_id` is not null))),
+  CONSTRAINT `assistant_task_executions_chk_11` CHECK (((`processing_status` not in (_utf8mb4'running',_utf8mb4'completed')) or (`node_id` is not null) or (`processing_status` = _utf8mb4'completed' and `task_type` = _utf8mb4'heartbeat'))),
   CONSTRAINT `assistant_task_executions_chk_12` CHECK (((`acknowledged_at` is null) or ((`finished_at` is not null) and (`acknowledged_at` >= `finished_at`) and (`acknowledged_at` <= `updated_at`)))),
   CONSTRAINT `assistant_task_executions_chk_13` CHECK (((`error_code` is null) or (char_length(trim(`error_code`)) > 0))),
   CONSTRAINT `assistant_task_executions_chk_2` CHECK ((json_type(`input_payload`) = _utf8mb4'OBJECT')),

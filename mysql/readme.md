@@ -69,3 +69,24 @@ SQLite 的初始化和自动升级由后端独立维护，本次精简不改变�
 2026-11-09 在无网络、临时内存数据目录的 MySQL 8.4 容器中，以原部署定义及知识后端历史迁移构建基准，再向另一空库执行合并脚本。逐表比较 26 张表的 `SHOW CREATE TABLE`（字段、索引、外键、检查约束）及初始记录，全部一致，画像序号初值为 1。此验证不代表生产模型、钉钉或中间件已联通。
 
 另使用现有 MySQL 8.4.13 镜像的官方入口，在隔离空数据目录中装入最新 SQL，完成插件配置、全部业务建表、插件安装及业务账号授权；验证 26 张表可由业务账号访问，画像序号为 1，MyVector 状态为 `ACTIVE`。生产及开发 Compose 均通过 `config --quiet`。未重建正式镜像或启动正式服务。
+
+
+---
+
+## 心跳裁剪约束升级
+
+知识后端空转心跳裁剪完成后，执行账本保留 `completed` 和队列确认状态，但 `node_id` 为空。新空库已在 [001-schema.sql](init/001-schema.sql) 放行该特例；其他类型的完成任务及全部执行中任务仍必须绑定节点。无新增列、环境变量或服务。
+
+已有库必须在启用新版后端前，备份并对正确业务库执行下面的约束变更；应用不自动迁移。此语句只改约束，不裁剪已有心跳、不修改业务行，也不能用完整初始化脚本代替。
+
+```sql
+ALTER TABLE assistant_task_executions
+    DROP CHECK assistant_task_executions_chk_11,
+    ADD CONSTRAINT assistant_task_executions_chk_11 CHECK (
+        processing_status NOT IN ('running', 'completed')
+        OR node_id IS NOT NULL
+        OR (processing_status = 'completed' AND task_type = 'heartbeat')
+    );
+```
+
+裁剪条件和持久化范围见[后端心跳说明](../knowledge-accumulation-be/description/capability/application/assistant-heartbeat.md#当前心跳记录裁剪)。完成过裁剪后，不能直接恢复旧约束或旧版执行账本校验；旧版本无法读取 `completed` 且 `node_id=NULL` 的记录。
